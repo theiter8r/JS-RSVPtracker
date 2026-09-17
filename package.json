@@ -1,0 +1,33 @@
+{
+  "name": "js-mumbai-rsvp",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "db:schema": "psql \"$DATABASE_URL\" -f lib/schema.sql",
+    "import": "tsx scripts/import-csv.ts",
+    "send": "tsx scripts/send-wave.ts",
+    "remind": "tsx scripts/send-reminders.ts",
+    "stats": "tsx scripts/stats.ts"
+  },
+  "dependencies": {
+    "csv-parse": "^7.0.2",
+    "next": "^16.3.5",
+    "nodemailer": "^10.0.10",
+    "pg": "^8.23.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.15.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "dotenv": "^17.0.0",
+    "tsx": "^4.23.13",
+    "typescript": "^5.9.0"
+  }
+}
