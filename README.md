@@ -43,7 +43,8 @@ Set these in the Vercel project settings:
 |---|---|
 | `DATABASE_URL` | the Postgres connection string |
 | `NEXT_PUBLIC_BASE_URL` | the deployed origin, no trailing slash |
-| `ADMIN_USER` / `ADMIN_PASSWORD` | your dashboard login |
+| `ADMIN_USER` / `ADMIN_PASSWORD` | your dashboard and scanner login |
+| `COUNT_SECRET` | path segment for the live count display |
 
 **Do not put the Gmail credentials on Vercel.** The sender runs from your laptop only.
 
@@ -121,6 +122,92 @@ Then update the guest list on luma.com by hand.
 
 ---
 
+## Door day — check-in and the live count
+
+A second, self-contained flow: volunteers scan each guest's Luma QR, and a screen
+shows the headcount live. It shares the database with the RSVP flow above but
+nothing else.
+
+**Two things worth knowing before you rely on it.**
+
+Luma's public API cannot record a check-in — `update_guest_status` accepts only
+`approved`/`declined`/`pending_approval`/`waitlist`. This app is therefore the only
+record of who came, and Luma's own dashboard will keep saying `checked_in: 0` all
+day. That is expected, not a bug.
+
+The app holds no Luma credentials. The guest list is pulled once, into
+`data/guests.json`, and imported. That file contains 897 guest keys — which are
+admission tokens — plus names and emails, so it is gitignored and must stay that way.
+
+### 1. Load the guest list
+
+`data/guests.json` is an array of `{guest_key, luma_guest_id, ticket_id, name, email}`,
+pulled from the Luma event. Then:
+
+```bash
+npm run db:schema          # adds `attendees` and `check_in_scans`; safe to re-run
+npm run import:guests      # upserts into `attendees`
+```
+
+Re-importing is additive and never clears a check-in, so it is safe to run again on
+the morning of the event to pick up late registrations.
+
+### 2. Set COUNT_SECRET
+
+```bash
+node -e 'console.log(require("crypto").randomBytes(12).toString("base64url"))'
+```
+
+Put it in `.env.local` and in the Vercel project settings. It is the path segment of
+the display page, not a password — it only keeps the headcount off a guessable URL.
+
+### 3. At the door
+
+| Surface | Who opens it |
+|---|---|
+| `/scan` | volunteers, behind the admin username and password |
+| `/count/<COUNT_SECRET>` | the display device — no login, share the link freely |
+
+Volunteers open `/scan` in Safari or Chrome, sign in once, and tap **Start scanning**.
+The tap matters: iOS will not produce the confirmation beep from an audio context
+that wasn't created by a user gesture.
+
+- **Green + name** — checked in.
+- **Amber** — already checked in, with the original time. The count does not move.
+- **Red** — not on the list, or a ticket for a different Luma event.
+
+The camera never stops; it resumes on its own after each scan. Three phones at once
+is fine — check-in is idempotent in Postgres, so whoever scans first wins.
+
+**It keeps working without wifi.** The guest list is cached in the page and check-ins
+queue on the device, flushing when the connection returns; a badge shows how many are
+waiting. One caveat: two devices that are offline *simultaneously* can both admit the
+same QR, because neither can see the other's writes. The server sorts it out on flush
+(first wins, second is logged as a duplicate) so the count stays correct — the door
+just won't have caught it live.
+
+### 4. The count display
+
+`/count/<COUNT_SECRET>` shows the number in seven-segment digits, polling every 2s.
+
+**Rotating the phone will not make it fullscreen by itself.** No browser allows
+fullscreen without a tap, and iOS Safari has no Fullscreen API at all. So:
+
+- **iPhone** — open the link, Share → **Add to Home Screen**, then launch it from
+  there. That is the only way it truly fills the screen.
+- **Android / laptop** — the **Fullscreen** button works directly.
+
+The screen is kept awake while the page is visible, so the display won't sleep
+mid-event.
+
+### 5. Afterwards
+
+`/admin` gains a **Door** section: checked in, guest-list size, and rejected scans.
+Two CSV downloads there — **Checked in** and **Full guest list** — are what to keep,
+since Luma will have no record of any of it.
+
+---
+
 ## Troubleshooting
 
 **Sends start failing in a row.** The script stops itself after 5 consecutive failures —
@@ -172,7 +259,12 @@ psql "$DATABASE_URL" -tAc "SELECT 'http://localhost:3000/r/'||token FROM partici
 | `app/admin/page.tsx` | counts, search, CSV download buttons |
 | `app/api/admin/export/route.ts` | CSV generation |
 | `proxy.ts` | HTTP Basic auth over `/admin` and `/api/admin` |
-| `lib/schema.sql` | `participants`, `email_sends`, `response_events` |
+| `app/scan/` | the scanner: camera, decode loop, offline queue |
+| `app/count/[secret]/` | the live headcount in seven-segment digits |
+| `app/api/scan/` | `manifest` (offline cache) and `checkin` (batched, idempotent) |
+| `lib/qr.ts` | parses and validates the Luma check-in QR |
+| `lib/checkin.ts` | the idempotent check-in query |
+| `lib/schema.sql` | `participants`, `email_sends`, `response_events`, `attendees`, `check_in_scans` |
 | `scripts/` | import, send, remind, stats |
 
 Two design points worth keeping if you edit this:

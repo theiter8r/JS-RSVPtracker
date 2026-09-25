@@ -30,8 +30,74 @@ function csvRow(values: unknown[]): string {
   return values.map(csvCell).join(",");
 }
 
+type AttendeeRow = {
+  name: string | null;
+  email: string | null;
+  guest_key: string;
+  luma_guest_id: string | null;
+  checked_in_at: Date | null;
+  checked_in_by: string | null;
+};
+
+const ist = (d: Date | null) =>
+  d
+    ? new Intl.DateTimeFormat("sv-SE", {
+        dateStyle: "short",
+        timeStyle: "medium",
+        timeZone: "Asia/Kolkata",
+      }).format(new Date(d))
+    : "";
+
+/**
+ * The door export: who actually walked in, and when.
+ *
+ * Separate from the RSVP export below because it answers a different question
+ * from a different table — and because it's the one you'll want on the Sunday,
+ * when Luma's own dashboard still says nobody checked in.
+ */
+async function attendeesCsv(onlyCheckedIn: boolean): Promise<Response> {
+  const rows = await query<AttendeeRow>(
+    `SELECT name, email, guest_key, luma_guest_id, checked_in_at, checked_in_by
+       FROM attendees
+      WHERE ($1::boolean IS NOT TRUE OR checked_in_at IS NOT NULL)
+      ORDER BY checked_in_at DESC NULLS LAST, name`,
+    [onlyCheckedIn],
+  );
+
+  const lines = [
+    csvRow(["name", "email", "checked_in_at_ist", "checked_in_by", "guest_key", "luma_guest_id"]),
+  ];
+  for (const r of rows) {
+    lines.push(
+      csvRow([
+        r.name,
+        r.email,
+        ist(r.checked_in_at),
+        r.checked_in_by,
+        r.guest_key,
+        r.luma_guest_id,
+      ]),
+    );
+  }
+
+  const stamp = new Date().toISOString().slice(0, 10);
+  const name = `js-mumbai-3-${onlyCheckedIn ? "checked-in" : "guest-list"}-${stamp}.csv`;
+
+  return new Response("\ufeff" + lines.join("\r\n") + "\r\n", {
+    headers: {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="${name}"`,
+      "Cache-Control": "no-store",
+    },
+  });
+}
+
 export async function GET(req: Request) {
   const url = new URL(req.url);
+  const kind = url.searchParams.get("kind");
+  if (kind === "checked_in") return attendeesCsv(true);
+  if (kind === "attendees") return attendeesCsv(false);
+
   const statusParam = url.searchParams.get("status") || "all";
   const full = url.searchParams.get("full") === "1";
 
@@ -61,15 +127,6 @@ export async function GET(req: Request) {
         (k) => !base.includes(k.toLowerCase()),
       )
     : [];
-
-  const ist = (d: Date | null) =>
-    d
-      ? new Intl.DateTimeFormat("sv-SE", {
-          dateStyle: "short",
-          timeStyle: "medium",
-          timeZone: "Asia/Kolkata",
-        }).format(new Date(d))
-      : "";
 
   const lines = [csvRow([...base, ...extraKeys])];
   for (const r of rows) {

@@ -1,0 +1,38 @@
+/* The 404. Dark to match the door and the count display, which are the only
+   pages anyone will realistically mistype their way off. */
+
+.nf {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  padding: 2rem 1rem;
+  background: #000;
+  color: #f2f2f0;
+  text-align: center;
+}
+
+.nf-img {
+  width: min(100%, 26rem);
+  height: auto;
+  border-radius: 12px;
+  display: block;
+}
+
+.nf-code {
+  margin: 0;
+  font-size: 0.8rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #ffb000;
+}
+
+.nf-text {
+  margin: 0;
+  max-width: 26rem;
+  color: #9a9aa5;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}

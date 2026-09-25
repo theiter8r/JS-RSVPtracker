@@ -1,0 +1,192 @@
+/*
+ * The door screen. Deliberately not themed like the rest of the app: this is a
+ * tool held at arm's length in a bright hotel lobby, so it is black, full-bleed,
+ * and the verdict is the only thing on it.
+ */
+
+.gate,
+.scan {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  color: #fff;
+  overflow: hidden;
+  /* Keeps content clear of the notch and the home indicator. */
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+}
+
+/* --- the start gate ------------------------------------------------------ */
+
+.gate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  text-align: center;
+  padding: 2rem 1.5rem;
+}
+
+.gate h1 { margin: 0; font-size: 1.6rem; letter-spacing: -0.02em; }
+.gate-sub { margin: 0; color: #9a9aa5; font-size: 0.95rem; }
+.gate-error {
+  margin: 0.5rem 0 0;
+  max-width: 28rem;
+  color: #fca5a5;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.gate-start {
+  margin-top: 1.25rem;
+  padding: 1rem 2.5rem;
+  border: 0;
+  border-radius: 999px;
+  background: #f7df1e;          /* JS yellow, as everywhere else in this app */
+  color: #16161a;
+  font: inherit;
+  font-size: 1.15rem;
+  font-weight: 600;
+  /* globals.css sets `button { width: 100% }`. */
+  width: auto;
+  /* 44px is the smallest reliable touch target; this is comfortably past it. */
+  min-height: 3.25rem;
+  cursor: pointer;
+}
+.gate-start:disabled { opacity: 0.5; }
+
+.gate-note {
+  margin: 0.5rem 0 0;
+  max-width: 22rem;
+  color: #6b6b76;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+/* --- the camera ---------------------------------------------------------- */
+
+.scan-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.scan-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: calc(env(safe-area-inset-top, 0px) + 0.6rem) 0.9rem 0.6rem;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.65), transparent);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.scan-tally { font-weight: 600; }
+
+.scan-pending {
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: #b45309;
+  font-size: 0.75rem;
+}
+
+.scan-torch {
+  margin-left: auto;
+  padding: 0.35rem 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff;
+  font: inherit;
+  font-size: 0.8rem;
+  min-height: 2.25rem;
+  width: auto;
+}
+
+/* A frame to aim with. Purely a hint — decoding uses the whole frame. */
+.scan-reticle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(62vw, 62vh);
+  height: min(62vw, 62vh);
+  transform: translate(-50%, -50%);
+  border: 3px solid rgba(255, 255, 255, 0.85);
+  border-radius: 1.5rem;
+  box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.35);
+  z-index: 2;
+}
+
+/* --- the verdict --------------------------------------------------------- */
+
+.scan-result {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  animation: verdict-in 120ms ease-out;
+}
+
+@keyframes verdict-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scan-result { animation: none; }
+}
+
+.scan--ok        .scan-result { background: #0f7b47; }
+.scan--duplicate .scan-result { background: #b45309; }
+.scan--unknown   .scan-result,
+.scan--foreign   .scan-result,
+.scan--malformed .scan-result { background: #9a1c11; }
+
+.scan-verdict {
+  margin: 0;
+  font-size: clamp(2rem, 11vw, 3.5rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+
+.scan-name {
+  margin: 0.4rem 0 0;
+  font-size: clamp(1.1rem, 5.5vw, 1.75rem);
+  font-weight: 500;
+  /* Long names must wrap rather than overflow a phone in portrait. */
+  overflow-wrap: anywhere;
+}
+
+.scan-detail {
+  margin: 0;
+  font-size: 0.95rem;
+  opacity: 0.85;
+  overflow-wrap: anywhere;
+}
+
+.scan-foot {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  padding: 0.5rem 0.9rem calc(env(safe-area-inset-bottom, 0px) + 0.5rem);
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 0.7rem;
+  text-align: center;
+}

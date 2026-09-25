@@ -1,0 +1,129 @@
+/*
+ * The live headcount panel.
+ *
+ * Amber on black, because that is what a counter display looks like and because
+ * it stays readable across a bright room at a shallow angle. Everything here is
+ * sized off the viewport, so the same page works on a phone in a pocket and a
+ * television on a stand.
+ */
+
+.count {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  background: #000;
+  color: #ffb000;
+  /* 100dvh, not 100vh: the dynamic unit excludes mobile browser chrome, which is
+     what lets this fill the screen even when true fullscreen is unavailable. */
+  min-height: 100dvh;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  overflow: hidden;
+}
+
+.count-digits {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* No gap: each digit's viewBox padding (room for the glow) spaces them. */
+  gap: 0;
+}
+
+.digit {
+  /* Each digit is 128:208 including glow padding, so three of them are ~1.85x
+     their height wide — height must stay under ~48vw to fit the screen. */
+  height: min(76dvh, 46vw);
+  width: auto;
+  display: block;
+}
+
+.seg {
+  /* The unlit segment. Faintly present, the way a real panel's dark segments are. */
+  fill: #ffb000;
+  opacity: 0.07;
+}
+
+.seg--on {
+  opacity: 1;
+}
+
+/* The halo: a blurred copy of the lit segments, drawn under the crisp ones. */
+.glow {
+  fill: #ffb000;
+  opacity: 0.6;
+}
+
+.glow--pulse {
+  animation: glow-pulse 320ms ease-out;
+}
+
+@keyframes glow-pulse {
+  from { opacity: 1; }
+  to   { opacity: 0.6; }
+}
+
+.count-stale {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 1rem);
+  margin: 0;
+  color: #b45309;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.count-fs,
+.count-hint {
+  position: absolute;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 1rem);
+}
+
+.count-fs {
+  right: calc(env(safe-area-inset-right, 0px) + 1rem);
+  padding: 0.5rem 1rem;
+  border: 1px solid rgba(255, 176, 0, 0.3);
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(255, 176, 0, 0.55);
+  font: inherit;
+  font-size: 0.8rem;
+  min-height: 2.5rem;
+  /* globals.css sets `button { width: 100% }`; this one is a pill, not a bar. */
+  width: auto;
+  cursor: pointer;
+}
+
+.count-hint {
+  left: calc(env(safe-area-inset-left, 0px) + 1rem);
+  max-width: min(45vw, 22rem);
+  margin: 0;
+  color: rgba(255, 176, 0, 0.3);
+  font-size: 0.7rem;
+  line-height: 1.5;
+}
+
+/* Once it's installed to the Home Screen or genuinely fullscreen, the chrome is
+   already gone — so the instructions for getting there should go too. */
+@media all and (display-mode: standalone), all and (display-mode: fullscreen) {
+  .count-fs,
+  .count-hint { display: none; }
+}
+
+:fullscreen .count-fs,
+:fullscreen .count-hint { display: none; }
+
+/* Landscape on a phone is the intended posture: drop the furniture and let the
+   digits take everything. */
+/* A phone held sideways — the posture this display is built for. */
+@media (orientation: landscape) and (max-height: 560px) {
+  .digit { height: min(92dvh, 48vw); }
+  .count-hint { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glow--pulse { animation: none; }
+}

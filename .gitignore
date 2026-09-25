@@ -6,4 +6,8 @@ out
 *.tsbuildinfo
 next-env.d.ts
 /data/*.csv
+/data/*.json
 /exports
+.vercel
+.env*
+!.env.example

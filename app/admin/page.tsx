@@ -14,6 +14,12 @@ type Stats = {
   failed: string;
 };
 
+type Door = {
+  guests: string;
+  checked_in: string;
+  turned_away: string;
+};
+
 type Row = {
   id: number;
   email: string;
@@ -66,6 +72,16 @@ export default async function AdminPage({
     FROM participants
   `);
 
+  // The door is a separate concern from the email RSVP above: different table,
+  // different question. Kept as its own query rather than bolted onto that one.
+  const [door] = await query<Door>(`
+    SELECT count(*)                                          AS guests,
+           count(*) FILTER (WHERE checked_in_at IS NOT NULL) AS checked_in,
+           (SELECT count(*) FROM check_in_scans
+             WHERE outcome IN ('unknown', 'foreign'))        AS turned_away
+      FROM attendees
+  `);
+
   const rows = await query<Row>(
     `SELECT p.id, p.email, p.name, p.status, p.responded_at,
             (SELECT max(sent_at) FROM email_sends e
@@ -92,6 +108,10 @@ export default async function AdminPage({
   const responseRate = invited > 0 ? Math.round((answered / invited) * 100) : 0;
   const exportQs = status ? `&status=${status}` : "";
 
+  const guests = Number(door?.guests || 0);
+  const checkedIn = Number(door?.checked_in || 0);
+  const turnedAway = Number(door?.turned_away || 0);
+
   return (
     <main className="admin-wrap">
       <span className="badge">{EVENT.name}</span>
@@ -100,6 +120,32 @@ export default async function AdminPage({
         {EVENT.dateLabel} · {EVENT.venueName}
       </p>
 
+      <h2 style={{ margin: "20px 0 8px", fontSize: "1rem" }}>Door</h2>
+      <div className="stats">
+        <div className="stat yes">
+          <div className="k">Checked in</div>
+          <div className="v">{checkedIn.toLocaleString("en-IN")}</div>
+        </div>
+        <div className="stat">
+          <div className="k">On the guest list</div>
+          <div className="v">{guests.toLocaleString("en-IN")}</div>
+        </div>
+        <div className="stat">
+          <div className="k">Rejected scans</div>
+          <div className="v">{turnedAway.toLocaleString("en-IN")}</div>
+        </div>
+      </div>
+
+      <div className="toolbar">
+        <a className="dl primary" href="/api/admin/export?kind=checked_in">
+          ↓ Checked in ({checkedIn})
+        </a>
+        <a className="dl" href="/api/admin/export?kind=attendees">
+          ↓ Full guest list ({guests})
+        </a>
+      </div>
+
+      <h2 style={{ margin: "28px 0 8px", fontSize: "1rem" }}>Email RSVP</h2>
       <div className="stats">
         <div className="stat">
           <div className="k">Participants</div>

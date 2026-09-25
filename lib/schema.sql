@@ -53,3 +53,42 @@ CREATE TABLE IF NOT EXISTS response_events (
 
 CREATE INDEX IF NOT EXISTS response_events_participant_idx
   ON response_events (participant_id, at DESC);
+
+-- ---------------------------------------------------------------------------
+-- Door check-in (JS Mumbai #3, 26 Sep 2026)
+-- ---------------------------------------------------------------------------
+
+-- One row per Luma guest who may walk through the door. Deliberately separate
+-- from `participants`: that table serves the email-RSVP flow and is keyed by
+-- email, while the door is keyed by the guest key baked into the QR.
+CREATE TABLE IF NOT EXISTS attendees (
+  id             serial PRIMARY KEY,
+  guest_key      text NOT NULL UNIQUE,   -- 'g-...', the ?pk= in the check-in QR
+  luma_guest_id  text,                   -- 'gst-...'
+  ticket_id      text,                   -- 'tkt-...'
+  name           text,
+  email          text,
+  checked_in_at  timestamptz,
+  checked_in_by  text,                   -- device label, so desks can be told apart
+  synced_at      timestamptz NOT NULL DEFAULT now()
+);
+
+-- Partial: the count query and the admin list only ever ask for checked-in rows.
+CREATE INDEX IF NOT EXISTS attendees_checked_in_idx
+  ON attendees (checked_in_at) WHERE checked_in_at IS NOT NULL;
+
+-- Append-only log of every scan, including the ones that were turned away. Tells
+-- you afterwards how many unknown or foreign QRs turned up at the door, which a
+-- single `checked_in_at` column can never record.
+CREATE TABLE IF NOT EXISTS check_in_scans (
+  id          serial PRIMARY KEY,
+  guest_key   text,
+  outcome     text        NOT NULL CHECK (outcome IN ('ok', 'duplicate', 'unknown', 'foreign')),
+  device      text,
+  -- When the phone decoded it. Differs from recorded_at for anything that sat in
+  -- the offline queue, so a wifi outage stays visible in the data.
+  scanned_at  timestamptz NOT NULL DEFAULT now(),
+  recorded_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS check_in_scans_at_idx ON check_in_scans (scanned_at DESC);

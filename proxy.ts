@@ -63,5 +63,7 @@ export function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/api/admin/:path*"],
+  // /count is deliberately absent: it is secret-gated in the route itself so a
+  // display device or a TV can open it without anyone typing a password.
+  matcher: ["/admin/:path*", "/api/admin/:path*", "/scan/:path*", "/api/scan/:path*"],
 };

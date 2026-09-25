@@ -11,7 +11,8 @@
     "import": "tsx scripts/import-csv.ts",
     "send": "tsx scripts/send-wave.ts",
     "remind": "tsx scripts/send-reminders.ts",
-    "stats": "tsx scripts/stats.ts"
+    "stats": "tsx scripts/stats.ts",
+    "import:guests": "tsx scripts/import-guests.ts"
   },
   "dependencies": {
     "csv-parse": "^7.0.2",
@@ -19,7 +20,8 @@
     "nodemailer": "^10.0.10",
     "pg": "^8.23.0",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "zxing-wasm": "^3.1.4"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

@@ -32,6 +32,13 @@ export const env = {
   get adminPassword() {
     return required("ADMIN_PASSWORD");
   },
+  /**
+   * The unguessable path segment for the live count display, e.g. /count/<secret>.
+   * Not a password: it keeps the number off a lucky URL guess, nothing more.
+   */
+  get countSecret() {
+    return required("COUNT_SECRET");
+  },
 
   // --- sender only (local scripts; never set on Vercel) ---
   get smtpHost() {
