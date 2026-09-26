@@ -9,6 +9,8 @@ type Scan = {
   scannedAt?: string;
   /** A well-formed QR for a different Luma event: logged, never checked in. */
   foreign?: boolean;
+  /** Found by name in the search sheet rather than scanned. */
+  manual?: boolean;
 };
 
 /**
@@ -52,7 +54,7 @@ export async function POST(req: Request) {
       continue;
     }
 
-    results.push(await checkIn(key, device, scannedAt));
+    results.push(await checkIn(key, device, scannedAt, scan.manual ? "manual" : "scan"));
   }
 
   return Response.json({ results }, { headers: { "Cache-Control": "no-store" } });

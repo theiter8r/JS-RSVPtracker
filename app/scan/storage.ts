@@ -18,6 +18,8 @@ export type QueuedScan = {
   guestKey: string;
   scannedAt: string;
   foreign?: boolean;
+  /** Checked in from the search sheet rather than scanned. */
+  manual?: boolean;
 };
 
 function read<T>(key: string, fallback: T): T {

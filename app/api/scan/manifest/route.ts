@@ -25,6 +25,12 @@ export async function GET() {
       // Tuples rather than objects: ~899 of these, and it halves the transfer.
       guests: rows.map((r) => [r.guest_key, r.name] as const),
       checkedIn: rows.filter((r) => r.checked_in_at).map((r) => r.guest_key),
+      // Same set with times, for the search sheet's "In · 10:04". A separate
+      // field rather than a change to `checkedIn`, so a phone still running
+      // the previous build keeps working.
+      checkedInTimes: rows
+        .filter((r) => r.checked_in_at)
+        .map((r) => [r.guest_key, new Date(r.checked_in_at!).toISOString()] as const),
     },
     { headers: { "Cache-Control": "no-store" } },
   );

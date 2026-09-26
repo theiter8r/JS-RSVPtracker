@@ -190,3 +190,201 @@
   font-size: 0.7rem;
   text-align: center;
 }
+
+/* --- manual search -------------------------------------------------------- */
+
+.scan-find {
+  margin-left: auto;
+  padding: 0.35rem 0.95rem;
+  border: 0;
+  border-radius: 999px;
+  background: #f7df1e;
+  color: #16161a;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  min-height: 2.25rem;
+  width: auto;          /* globals.css sets `button { width: 100% }` */
+}
+/* With the search button taking the auto margin, the torch sits beside it. */
+.scan-find + .scan-torch { margin-left: 0; }
+
+.find {
+  position: absolute;
+  inset: 0;
+  z-index: 6;           /* over the camera, the bar, and any verdict */
+  display: flex;
+  flex-direction: column;
+  background: #0b0b0d;
+  color: #f2f2f0;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) 0
+    env(safe-area-inset-left, 0px);
+  animation: find-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes find-in {
+  from { transform: translateY(24px); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .find { animation: none; }
+}
+
+.find-head {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.75rem 0.9rem 0.5rem;
+}
+
+.find-input {
+  flex: 1;
+  min-width: 0;
+  height: 2.9rem;
+  padding: 0 1rem;
+  border: 1px solid #2c2c32;
+  border-radius: 0.8rem;
+  background: #1b1b1f;
+  color: #f2f2f0;
+  font: inherit;
+  /* 17px: anything under 16px makes iOS Safari zoom the page on focus. */
+  font-size: 17px;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.find-input:focus { border-color: #f7df1e; }
+.find-input::placeholder { color: #6b6b76; }
+
+.find-close {
+  width: auto;
+  padding: 0 0.9rem;
+  height: 2.9rem;
+  border: 0;
+  background: transparent;
+  color: #f7df1e;
+  font: inherit;
+  font-weight: 600;
+}
+
+.find-meta {
+  margin: 0;
+  padding: 0 1rem 0.5rem;
+  color: #6b6b76;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+.find-sync { color: #9a9aa5; }
+
+.find-note {
+  margin: 0 0.9rem 0.5rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 0.6rem;
+  background: #2a1a12;
+  color: #fdba74;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.find-list {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;   /* no scroll-chaining into the page behind */
+  -webkit-overflow-scrolling: touch;
+  padding: 0 0.9rem calc(env(safe-area-inset-bottom, 0px) + 1rem);
+}
+
+.find-label {
+  margin: 0.5rem 0.1rem 0.4rem;
+  color: #6b6b76;
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.find-empty {
+  margin: 2.5rem 1rem;
+  color: #6b6b76;
+  text-align: center;
+  line-height: 1.6;
+}
+
+.find-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 4rem;
+  padding: 0.6rem 0.2rem;
+  border-bottom: 1px solid #1f1f24;
+}
+
+.find-who {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.find-name {
+  font-weight: 600;
+  font-size: 1rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.find-status {
+  font-size: 0.8rem;
+  color: #6b6b76;
+}
+.find-status--in { color: #4ade80; }
+
+.find-act {
+  flex-shrink: 0;
+  width: auto;
+  min-width: 6.5rem;
+  height: 2.6rem;
+  padding: 0 1rem;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: background-color 150ms ease, color 150ms ease, transform 80ms ease;
+}
+.find-act:active { transform: scale(0.97); }
+
+.find-act--in {
+  border: 0;
+  background: #f7df1e;
+  color: #16161a;
+}
+
+.find-act--undo {
+  border: 1px solid #3a3a42;
+  background: transparent;
+  color: #d4d4d8;
+}
+
+/* The armed state of the two-tap undo: unmistakably different from "Undo". */
+.find-act--confirm {
+  border-color: #dc2626;
+  background: #dc2626;
+  color: #fff;
+}
+
+/* On a tablet or a laptop at the desk, keep the list a readable column. */
+.find-head,
+.find-meta,
+.find-note,
+.find-list {
+  width: 100%;
+  max-width: 42rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+.find-note {
+  width: calc(100% - 1.8rem);
+  max-width: calc(42rem - 1.8rem);
+}

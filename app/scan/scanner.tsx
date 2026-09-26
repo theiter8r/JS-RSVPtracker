@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parseLumaQr } from "@/lib/qr";
 import {
   deviceLabel,
@@ -13,6 +13,7 @@ import {
   type GuestTuple,
   type QueuedScan,
 } from "./storage";
+import GuestSearch from "./search";
 
 type Outcome = "ok" | "duplicate" | "unknown" | "foreign" | "malformed";
 
@@ -60,6 +61,10 @@ export default function Scanner() {
   const [engine, setEngine] = useState<"native" | "wasm" | null>(null);
   const [listSize, setListSize] = useState(0);
   const [torch, setTorch] = useState<"off" | "on" | "unavailable">("unavailable");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  /** Bumped whenever the guest/check-in refs change, so the search sheet re-reads them. */
+  const [version, setVersion] = useState(0);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -71,6 +76,8 @@ export default function Scanner() {
   const checkedInRef = useRef<Map<string, string>>(new Map());
   const stoppedRef = useRef(false);
   const busyRef = useRef(false);
+  /** True while the search sheet is open: the camera must not scan behind it. */
+  const pausedRef = useRef(false);
   const lastRef = useRef({ raw: "", at: 0 });
   const idRef = useRef(0);
   const deviceRef = useRef("");
@@ -190,6 +197,75 @@ export default function Scanner() {
     [enqueue],
   );
 
+  // --- admitting one guest -------------------------------------------------
+
+  /**
+   * The shared path for a scanned QR and a name tapped in the search sheet:
+   * answer instantly from the local cache, record it, and let the server's
+   * verdict correct the screen if another desk (or a stale list) disagrees.
+   */
+  const admit = useCallback(
+    async (guestKey: string, source: "scan" | "manual", scanId?: number) => {
+      const id = scanId ?? ++idRef.current;
+      const present = (outcome: Outcome, name: string | null, at: string | null, detail: string | null) => {
+        if (idRef.current !== id) return; // a newer scan already took over
+        setShown({ id, outcome, name, at, detail });
+        beep(outcome);
+      };
+
+      busyRef.current = true;
+
+      const known = guestsRef.current.has(guestKey);
+      const already = checkedInRef.current.get(guestKey);
+      const name = guestsRef.current.get(guestKey) ?? null;
+
+      // Answer from the local cache first — instant, and correct without a network.
+      const optimistic: Outcome = !known ? "unknown" : already ? "duplicate" : "ok";
+      present(optimistic, name, already ?? null, known ? null : guestKey);
+
+      if (optimistic === "ok") {
+        checkedInRef.current.set(guestKey, new Date().toISOString());
+        saveCheckedIn(checkedInRef.current.keys());
+        setTally((t) => t + 1);
+      }
+
+      const scannedAt = new Date().toISOString();
+      const verdict = await record({ guestKey, scannedAt, manual: source === "manual" });
+
+      // The server is authoritative: another desk may have taken this person
+      // already, which no amount of local state could have known.
+      if (verdict && verdict.outcome !== optimistic) {
+        if (verdict.outcome === "duplicate" && verdict.checkedInAt) {
+          checkedInRef.current.set(guestKey, verdict.checkedInAt);
+          saveCheckedIn(checkedInRef.current.keys());
+          if (optimistic === "ok") setTally((t) => Math.max(0, t - 1));
+        }
+        if (verdict.outcome === "unknown" && optimistic === "ok") {
+          // This phone's list was stale — e.g. the guest was declined on Luma
+          // and pruned since it last synced. Take back the local check-in.
+          checkedInRef.current.delete(guestKey);
+          saveCheckedIn(checkedInRef.current.keys());
+          setTally((t) => Math.max(0, t - 1));
+        }
+        if (verdict.outcome === "ok") {
+          checkedInRef.current.set(guestKey, verdict.checkedInAt ?? new Date().toISOString());
+          saveCheckedIn(checkedInRef.current.keys());
+          setTally((t) => t + 1);
+        }
+        present(verdict.outcome, verdict.name ?? name, verdict.checkedInAt, null);
+      }
+
+      setTimeout(
+        () => {
+          busyRef.current = false;
+          setShown((s) => (s?.id === id ? null : s));
+        },
+        LINGER[verdict?.outcome ?? optimistic],
+      );
+    },
+    [beep, record],
+  );
+
   // --- handling one decoded payload ----------------------------------------
 
   const handle = useCallback(
@@ -228,51 +304,9 @@ export default function Scanner() {
         return;
       }
 
-      const { guestKey } = parsed;
-      busyRef.current = true;
-
-      const known = guestsRef.current.has(guestKey);
-      const already = checkedInRef.current.get(guestKey);
-      const name = guestsRef.current.get(guestKey) ?? null;
-
-      // Answer from the local cache first — instant, and correct without a network.
-      const optimistic: Outcome = !known ? "unknown" : already ? "duplicate" : "ok";
-      present(optimistic, name, already ?? null, known ? null : guestKey);
-
-      if (optimistic === "ok") {
-        checkedInRef.current.set(guestKey, new Date().toISOString());
-        saveCheckedIn(checkedInRef.current.keys());
-        setTally((t) => t + 1);
-      }
-
-      const scannedAt = new Date().toISOString();
-      const verdict = await record({ guestKey, scannedAt });
-
-      // The server is authoritative: another desk may have taken this person
-      // already, which no amount of local state could have known.
-      if (verdict && verdict.outcome !== optimistic) {
-        if (verdict.outcome === "duplicate" && verdict.checkedInAt) {
-          checkedInRef.current.set(guestKey, verdict.checkedInAt);
-          saveCheckedIn(checkedInRef.current.keys());
-          if (optimistic === "ok") setTally((t) => Math.max(0, t - 1));
-        }
-        if (verdict.outcome === "ok") {
-          checkedInRef.current.set(guestKey, verdict.checkedInAt ?? new Date().toISOString());
-          saveCheckedIn(checkedInRef.current.keys());
-          setTally((t) => t + 1);
-        }
-        present(verdict.outcome, verdict.name ?? name, verdict.checkedInAt, null);
-      }
-
-      setTimeout(
-        () => {
-          busyRef.current = false;
-          setShown((s) => (s?.id === id ? null : s));
-        },
-        LINGER[verdict?.outcome ?? optimistic],
-      );
+      await admit(parsed.guestKey, "scan", id);
     },
-    [beep, record],
+    [admit, beep, record],
   );
 
   // --- the decode loop ------------------------------------------------------
@@ -321,7 +355,7 @@ export default function Scanner() {
 
     const tick = async () => {
       if (stoppedRef.current) return;
-      if (!busyRef.current) {
+      if (!busyRef.current && !pausedRef.current) {
         try {
           const raw = await detect(video);
           if (raw) await handle(raw);
@@ -460,6 +494,105 @@ export default function Scanner() {
     }
   }, [torch]);
 
+  // --- the guest list -------------------------------------------------------
+
+  /**
+   * Pulls the guest list and who's in from the server. Runs on load and every
+   * time the search sheet opens, so the sheet shows other desks' check-ins.
+   */
+  const refreshManifest = useCallback(async (): Promise<boolean> => {
+    try {
+      const res = await fetch("/api/scan/manifest", { cache: "no-store" });
+      if (!res.ok) return false;
+      const body: {
+        guests: GuestTuple[];
+        checkedIn: string[];
+        checkedInTimes?: [string, string][];
+      } = await res.json();
+      guestsRef.current = new Map(body.guests);
+      saveGuests(body.guests);
+
+      // REPLACE the checked-in set rather than merging into it. The server is
+      // authoritative, and a merge can never forget: a check-in recorded on
+      // this device during a test would survive into the real event and show a
+      // false "Already in" for someone who has not actually arrived.
+      // The one thing worth keeping is scans still sitting in the offline
+      // queue, which the server legitimately hasn't seen yet.
+      const times = new Map(body.checkedInTimes ?? body.checkedIn.map((k) => [k, ""] as [string, string]));
+      for (const q of loadQueue()) if (!times.has(q.guestKey)) times.set(q.guestKey, q.scannedAt);
+      checkedInRef.current = times;
+      saveCheckedIn(checkedInRef.current.keys());
+      setListSize(body.guests.length);
+      return true;
+    } catch {
+      // Offline: the cache is what we run on.
+      return false;
+    }
+  }, []);
+
+  // --- manual search ---------------------------------------------------------
+
+  const openSearch = useCallback(() => {
+    pausedRef.current = true;
+    setSearchOpen(true);
+    setSyncing(true);
+    void refreshManifest().finally(() => {
+      setSyncing(false);
+      setVersion((v) => v + 1);
+    });
+  }, [refreshManifest]);
+
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false);
+    pausedRef.current = false;
+  }, []);
+
+  /** Checking someone in by name ends exactly like a scan: the green screen and the beep. */
+  const manualCheckIn = useCallback(
+    (key: string) => {
+      closeSearch();
+      void admit(key, "manual");
+    },
+    [admit, closeSearch],
+  );
+
+  const undoCheckIn = useCallback(async (key: string): Promise<"ok" | "gone" | "error"> => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4000);
+    try {
+      const res = await fetch("/api/scan/undo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ guestKey: key, device: deviceRef.current }),
+        signal: controller.signal,
+      });
+      if (!res.ok) return "error";
+      const body: { undone: boolean; previousDevice: string | null } = await res.json();
+      checkedInRef.current.delete(key);
+      saveCheckedIn(checkedInRef.current.keys());
+      // The tally counts this phone's check-ins, so only undoing one of ours moves it.
+      if (body.undone && body.previousDevice === deviceRef.current) setTally((t) => Math.max(0, t - 1));
+      setVersion((v) => v + 1);
+      return body.undone ? "ok" : "gone";
+    } catch {
+      return "error";
+    } finally {
+      clearTimeout(timer);
+    }
+  }, []);
+
+  // Snapshots of the refs for the sheet; `version` is the signal they changed.
+  const searchGuests = useMemo(
+    () => [...guestsRef.current].map(([key, name]) => ({ key, name })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [version, listSize],
+  );
+  const searchCheckedIn = useMemo(
+    () => new Map(checkedInRef.current),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [version, tally],
+  );
+
   // --- lifecycle ------------------------------------------------------------
 
   useEffect(() => {
@@ -473,30 +606,7 @@ export default function Scanner() {
     setListSize(cached.length);
     setPending(loadQueue().length);
 
-    void (async () => {
-      try {
-        const res = await fetch("/api/scan/manifest");
-        if (!res.ok) return;
-        const body: { guests: GuestTuple[]; checkedIn: string[] } = await res.json();
-        guestsRef.current = new Map(body.guests);
-        saveGuests(body.guests);
-
-        // REPLACE the checked-in set rather than merging into it. The server is
-        // authoritative, and a merge can never forget: a check-in recorded on
-        // this device during a test would survive into the real event and show a
-        // false "Already in" for someone who has not actually arrived.
-        // The one thing worth keeping is scans still sitting in the offline
-        // queue, which the server legitimately hasn't seen yet.
-        const pending = new Set(loadQueue().map((q) => q.guestKey));
-        checkedInRef.current = new Map(
-          [...body.checkedIn, ...pending].map((key) => [key, ""] as const),
-        );
-        saveCheckedIn(checkedInRef.current.keys());
-        setListSize(body.guests.length);
-      } catch {
-        // Offline on load: the cache above is what we run on.
-      }
-    })();
+    void refreshManifest();
 
     void flush();
     const onOnline = () => void flush();
@@ -509,7 +619,7 @@ export default function Scanner() {
       clearInterval(timer);
       streamRef.current?.getTracks().forEach((t) => t.stop());
     };
-  }, [flush]);
+  }, [flush, refreshManifest]);
 
   // --- render ---------------------------------------------------------------
 
@@ -537,8 +647,11 @@ export default function Scanner() {
       <video ref={videoRef} className="scan-video" playsInline muted autoPlay />
 
       <header className="scan-bar">
-        <span className="scan-tally">{tally} scanned</span>
+        <span className="scan-tally">{tally} checked in</span>
         {pending > 0 && <span className="scan-pending">{pending} queued</span>}
+        <button className="scan-find" onClick={openSearch}>
+          Search
+        </button>
         {torch !== "unavailable" && (
           <button className="scan-torch" onClick={() => void toggleTorch()}>
             {torch === "on" ? "Torch off" : "Torch"}
@@ -561,6 +674,17 @@ export default function Scanner() {
           {shown.at && <p className="scan-detail">since {timeLabel(shown.at)}</p>}
           {shown.detail && <p className="scan-detail">{shown.detail}</p>}
         </div>
+      )}
+
+      {searchOpen && (
+        <GuestSearch
+          guests={searchGuests}
+          checkedIn={searchCheckedIn}
+          syncing={syncing}
+          onCheckIn={manualCheckIn}
+          onUndo={undoCheckIn}
+          onClose={closeSearch}
+        />
       )}
 
       <footer className="scan-foot">

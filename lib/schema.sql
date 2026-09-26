@@ -92,3 +92,10 @@ CREATE TABLE IF NOT EXISTS check_in_scans (
 );
 
 CREATE INDEX IF NOT EXISTS check_in_scans_at_idx ON check_in_scans (scanned_at DESC);
+
+-- Manual check-ins from the search sheet, and undoing a check-in. Added on the
+-- event morning, so written to be re-runnable against a live database.
+ALTER TABLE check_in_scans ADD COLUMN IF NOT EXISTS source text NOT NULL DEFAULT 'scan';
+ALTER TABLE check_in_scans DROP CONSTRAINT IF EXISTS check_in_scans_outcome_check;
+ALTER TABLE check_in_scans ADD CONSTRAINT check_in_scans_outcome_check
+  CHECK (outcome IN ('ok', 'duplicate', 'unknown', 'foreign', 'undo'));
