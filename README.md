@@ -149,8 +149,11 @@ npm run db:schema          # adds `attendees` and `check_in_scans`; safe to re-r
 npm run import:guests      # upserts into `attendees`
 ```
 
-Re-importing is additive and never clears a check-in, so it is safe to run again on
-the morning of the event to pick up late registrations.
+Re-importing never clears a check-in, so it is safe to run again on the morning of
+the event to pick up late registrations. Add `--prune` to also drop guests who were
+declined on Luma since the last pull (anyone already checked in is always kept), and
+`--dry-run` to see the +/− counts first. Prune refuses a file much shorter than the
+current list, which is what a truncated pull looks like.
 
 ### 2. Set COUNT_SECRET
 
